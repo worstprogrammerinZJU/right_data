@@ -18,10 +18,10 @@ jobs:
         with:
           python-version: '3.10'
 
-      # 关键步骤：安装依赖库 Boost
+      # 安装 Boost 和 OpenSSL
       - name: Install Dependencies
         run: |
-          brew install boost
+          brew install boost openssl@3
 
       - name: Run Extraction
         run: |
@@ -36,8 +36,11 @@ jobs:
       - name: Compile to ARM64 Assembly
         run: |
           mkdir -p generated_asm
-          # 获取 Homebrew 安装的 boost 路径
+          
+          # 获取依赖库的包含路径
           BOOST_INC=$(brew --prefix boost)/include
+          # OpenSSL 需要特别指定其在 Homebrew 中的路径
+          OPENSSL_INC=$(brew --prefix openssl@3)/include
           
           find src_code -type f \( -name "*.c" -o -name "*.cpp" \) | while read file; do
             filename=$(basename "$file")
@@ -46,17 +49,13 @@ jobs:
             
             echo "Compiling $filename..."
             
+            # 统一 C 和 C++ 的编译选项前缀
+            COMMON_OPTS="-S -arch arm64 -O0 -fno-asynchronous-unwind-tables -I$BOOST_INC -I$OPENSSL_INC"
+            
             if [ "$ext" = "cpp" ]; then
-              # 加入 -I $BOOST_INC 来解决 boost 找不到的问题
-              clang++ -S -arch arm64 -O0 \
-                -std=c++17 -stdlib=libc++ \
-                -I "$BOOST_INC" \
-                -fno-asynchronous-unwind-tables \
-                "$file" -o "generated_asm/${base}.s"
+              clang++ $COMMON_OPTS -std=c++17 -stdlib=libc++ "$file" -o "generated_asm/${base}.s"
             else
-              clang -S -arch arm64 -O0 \
-                -fno-asynchronous-unwind-tables \
-                "$file" -o "generated_asm/${base}.s"
+              clang $COMMON_OPTS "$file" -o "generated_asm/${base}.s"
             fi
           done
 

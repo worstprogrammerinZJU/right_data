@@ -1,0 +1,52 @@
+name: Generate ARM64 Assembly (C/C++ Hybrid)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-asm:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Extract Code
+        run: python extract.py
+
+      - name: Batch Compile to ARM64 Assembly
+        run: |
+          mkdir -p generated_asm
+          for file in src_code/*; do
+            filename=$(basename "$file")
+            ext="${filename##*.}"
+            base="${filename%.*}"
+            
+            echo "Processing $filename (Extension: $ext)..."
+            
+            if [ "$ext" = "cpp" ]; then
+              # C++ 编译选项
+              clang++ -S -arch arm64 -O0 \
+                -std=c++17 -stdlib=libc++ \
+                -fno-asynchronous-unwind-tables \
+                "$file" -o "generated_asm/${base}.s"
+            else
+              # 纯 C 编译选项
+              clang -S -arch arm64 -O0 \
+                -fno-asynchronous-unwind-tables \
+                "$file" -o "generated_asm/${base}.s"
+            fi
+          done
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-assembly-files
+          path: generated_asm/
